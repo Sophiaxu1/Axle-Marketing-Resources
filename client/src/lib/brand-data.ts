@@ -1,0 +1,254 @@
+export interface BrandColor {
+  name: string;
+  hex: string;
+}
+
+export interface BrandColorGroup {
+  label: string;
+  colors: BrandColor[];
+}
+
+export interface FontInfo {
+  name: string;
+  link: string;
+  variants: string[];
+  fontFamily: string;
+}
+
+export interface TemplateInfo {
+  name: string;
+  file?: string;
+}
+
+export interface LogoVariant {
+  name: string;
+  file?: string;
+  previewBg?: string;
+  group?: string;
+  note?: string;
+  scale?: number;
+}
+
+export interface LibraryAsset {
+  name: string;
+  file: string;
+  type: "image" | "video";
+}
+
+export interface LibraryFolder {
+  label: string;
+  assets: LibraryAsset[];
+}
+
+export interface BrandData {
+  id: string;
+  name: string;
+  shortName: string;
+  primaryColor: string;
+  secondaryColor: string;
+  gradientFrom: string;
+  gradientTo: string;
+  colorGroups: BrandColorGroup[];
+  fonts: FontInfo[];
+  templates: TemplateInfo[];
+  logos: LogoVariant[];
+  guidelinesFile?: string;
+  libraryFolders?: LibraryFolder[];
+}
+
+export function getAssetUrl(relativePath: string): string {
+  const raw = decodeURIComponent(relativePath);
+  return `/api/asset?path=${encodeURIComponent(raw)}`;
+}
+
+export function getDownloadUrl(relativePath: string): string {
+  const raw = decodeURIComponent(relativePath);
+  return `/api/download?path=${encodeURIComponent(raw)}`;
+}
+
+const sharedFonts: FontInfo[] = [
+  {
+    name: "Montserrat",
+    link: "https://fonts.google.com/specimen/Montserrat",
+    variants: ["Bold", "Regular", "Regular Italic"],
+    fontFamily: "'Montserrat', sans-serif",
+  },
+  {
+    name: "Red Hat Display",
+    link: "https://fonts.google.com/specimen/Red+Hat+Display",
+    variants: ["Bold", "Regular", "Regular Italic"],
+    fontFamily: "'Red Hat Display', sans-serif",
+  },
+  {
+    name: "Aptos",
+    link: "https://www.microsoft.com/en-us/download/details.aspx?id=106087",
+    variants: ["Bold", "Regular", "Regular Italic"],
+    fontFamily: "'Aptos', 'Calibri', sans-serif",
+  },
+];
+
+export const brands: Record<string, BrandData> = {
+  axlerator: {
+    id: "axlerator",
+    name: "Axlerator",
+    shortName: "Axlerator",
+    primaryColor: "#17052E",
+    secondaryColor: "#F5623D",
+    gradientFrom: "#F5623D",
+    gradientTo: "#F5623D",
+    colorGroups: [
+      {
+        label: "Primary Colors",
+        colors: [
+          { name: "Dark Purple", hex: "#17052E" },
+          { name: "Orange", hex: "#F5623D" },
+        ],
+      },
+      {
+        label: "Secondary/Accent Colors",
+        colors: [
+          { name: "Purple", hex: "#4A2654" },
+          { name: "Grey", hex: "#E7E6E6" },
+        ],
+      },
+    ],
+    fonts: sharedFonts,
+    guidelinesFile: "Axlerator/Brand%20Guidelines/Axlerator%20Brand%20Guidelines.pdf",
+    templates: [
+      { name: "PowerPoint Template", file: "Axlerator/Templates/axlerator-powerpoint-template.pptx" },
+      { name: "Letterhead", file: "Axlerator/Templates/axlerator-letterhead.docx" },
+      { name: "Email Signature", file: "Axlerator/Templates/axlerator-email-signature.docx" },
+    ],
+    logos: [
+      { name: "Full Color Logo", file: "Axlerator/Logos/Primary/Axlerator%20Logo_Primary.png", group: "Primary Logo" },
+      { name: "White and Orange Logo", file: "Axlerator/Logos/Secondary/Axlerator%20Logo_White_Orange.png", previewBg: "#17052e", group: "Secondary Logo" },
+      { name: "All White Logo", file: "Axlerator/Logos/Secondary/Axlerator%20Logo_White.png", previewBg: "#17052e", group: "Secondary Logo" },
+    ],
+    libraryFolders: [
+      { label: "Image Library", assets: [] },
+    ],
+  },
+
+  axle: {
+    id: "axle",
+    name: "Axle",
+    shortName: "Axle",
+    primaryColor: "#4A2654",
+    secondaryColor: "#F5623D",
+    gradientFrom: "#4A2654",
+    gradientTo: "#4A2654",
+    colorGroups: [
+      {
+        label: "Primary Colors",
+        colors: [
+          { name: "Purple", hex: "#4A2654" },
+          { name: "Orange", hex: "#F5623D" },
+        ],
+      },
+      {
+        label: "Secondary/Accent Colors",
+        colors: [
+          { name: "Dark Purple", hex: "#17052E" },
+          { name: "Grey", hex: "#E7E6E6" },
+          { name: "Green", hex: "#A1DB00" },
+        ],
+      },
+    ],
+    fonts: sharedFonts,
+    guidelinesFile: "Axle/Brand%20Guidelines/Axle%20Brand%20Guidelines.pdf",
+    templates: [
+      { name: "PowerPoint Template", file: "Axle/Templates/axle-powerpoint-template.pptx" },
+      { name: "Letterhead - With Tagline", file: "Axle/Templates/axle-letterhead-with-tagline.docx" },
+      { name: "Email Signature", file: "Axle/Templates/axle-email-signature.docx" },
+      { name: "Letterhead - Simple", file: "Axle/Templates/axle-letterhead-simple.docx" },
+    ],
+    logos: [
+      { name: "Purple and Orange Logo", file: "Axle/Logos/Primary/Axle-Logo-FullColor-CMYK.png", group: "Primary Logos" },
+      { name: "White and Orange Logo", file: "Axle/Logos/Primary/Axle%20Logos_White%20and%20Orange.png", previewBg: "#4A2654", group: "Primary Logos" },
+      { name: "All White Logo", file: "Axle/Logos/Secondary/Axle%20Logos_White.png", previewBg: "#4A2654", group: "Secondary Logos" },
+      { name: "All Purple Logo", file: "Axle/Logos/Secondary/Axle%20Logos_Purple.png", group: "Secondary Logos" },
+    ],
+    libraryFolders: [
+      { label: "Image Library", assets: [] },
+    ],
+  },
+
+  art: {
+    id: "art",
+    name: "Axle Research and Technologies (ART)",
+    shortName: "ART",
+    primaryColor: "#17052E",
+    secondaryColor: "#7AB351",
+    gradientFrom: "#17052E",
+    gradientTo: "#17052E",
+    colorGroups: [
+      {
+        label: "Primary Colors",
+        colors: [
+          { name: "Dark Purple", hex: "#17052E" },
+          { name: "Green", hex: "#7AB351" },
+        ],
+      },
+      {
+        label: "Secondary/Accent Colors",
+        colors: [
+          { name: "Grey", hex: "#E7E6E6" },
+          { name: "White", hex: "#FFFFFF" },
+        ],
+      },
+    ],
+    fonts: sharedFonts,
+    guidelinesFile: "Axle%20Research%20and%20Technologies/Brand%20Guidelines/ART%20Brand%20Guidelines.pdf",
+    templates: [
+      { name: "PowerPoint Template", file: "Axle%20Research%20and%20Technologies/Templates/art-powerpoint-template.pptx" },
+      { name: "Letterhead", file: "Axle%20Research%20and%20Technologies/Templates/art-letterhead.docx" },
+      { name: "Email Signature", file: "Axle%20Research%20and%20Technologies/Templates/art-email-signature.docx" },
+    ],
+    logos: [
+      { name: "Full Color Logo", file: "Axle%20Research%20and%20Technologies/Logos/Primary/art-logo-fullcolor.png", group: "Primary Logos" },
+      { name: "Full Color Stacked", file: "Axle%20Research%20and%20Technologies/Logos/Primary/art-logo-stacked-fullcolor.png", group: "Primary Logos", scale: 1.4 },
+      { name: "All White Logo", file: "Axle%20Research%20and%20Technologies/Logos/Secondary/art-logo-white.png", previewBg: "#17052E", group: "Secondary Logos" },
+      { name: "All White Stacked", file: "Axle%20Research%20and%20Technologies/Logos/Secondary/art-logo-stacked-white.png", previewBg: "#17052E", group: "Secondary Logos" },
+      { name: "White & Green Logo", file: "Axle%20Research%20and%20Technologies/Logos/White%20%26%20Green/art-logo-white-green.png", previewBg: "#17052E", group: "White & Green Logos" },
+      { name: "White & Green Stacked", file: "Axle%20Research%20and%20Technologies/Logos/White%20%26%20Green/art-logo-stacked-green-white.png", previewBg: "#17052E", group: "White & Green Logos" },
+    ],
+    libraryFolders: [
+      { label: "Image Library", assets: [] },
+    ],
+  },
+};
+
+export const brandList = Object.values(brands);
+
+export const requestItems = [
+  {
+    title: "Marketing Request",
+    description: "Request market intelligence, marketing materials, and creative assets",
+    link: "https://forms.office.com/Pages/ResponsePage.aspx?id=qhjWXSfEd0W6Lj80YxIzaQ2MUkywFiZMinRuRQi-QqBUNzhZTVZQWTJYT0hHOFZDU1oxODQwQkdPWC4u",
+  },
+  {
+    title: "Business Card Request",
+    description: "Order new business cards or update existing ones",
+    link: "https://forms.office.com/Pages/ResponsePage.aspx?id=qhjWXSfEd0W6Lj80YxIzaQ2MUkywFiZMinRuRQi-QqBUOTdPTlZLMlAxWkhBUDdYQlJKQVc1S1ZUMy4u",
+  },
+  {
+    title: "Event Support Request",
+    description: "Request support for events, conferences, and trade shows",
+    link: "https://forms.office.com/Pages/ResponsePage.aspx?id=qhjWXSfEd0W6Lj80YxIzaRKDqYFsxupDhVxvMWw2toVUOUNVQjlHRFIxVjhaUlBSNDZXWjRKQ1ZFUC4u",
+  },
+];
+
+export const storeItems = [
+  {
+    title: "Axle Merch Store",
+    description: "Shop for and purchase pre-selected premium branded items",
+    link: "https://axle-informatics.checkoutstores.com/",
+    comingSoon: false,
+  },
+  {
+    title: "Event Swag Store",
+    description: "Order branded items for events, conferences, and trade shows",
+    link: "https://www.customink.com/s/axle-informatics",
+    comingSoon: false,
+  },
+];

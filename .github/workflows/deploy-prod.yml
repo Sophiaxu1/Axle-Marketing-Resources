@@ -1,0 +1,166 @@
+name: Deploy Marketing-Resources — PROD
+
+# ── Configuration — GitHub Environment: production ───────────────────
+# All secrets and variables are loaded from:
+#   Settings → Environments → production → Secrets and variables
+#
+# Required secrets:
+#   AZURE_CREDENTIALS             — Azure service principal JSON
+#                                   (az ad sp create-for-rbac --sdk-auth)
+#   GHCR_PAT                      — GitHub Container Registry Personal Access Token
+#   VITE_SUPABASE_PROJECT_ID      — Supabase project ID
+#   VITE_SUPABASE_ANON_KEY        — Supabase anon key used by the frontend
+#   VITE_SUPABASE_PUBLISHABLE_KEY — Supabase anon/publishable key
+#   VITE_SUPABASE_URL             — Supabase API URL (https://<id>.supabase.co)
+#   SUPABASE_SERVICE_ROLE_KEY     — Supabase service role key (server-side only, never exposed to frontend)
+#   DESTINATION_DB_URL            — Postgres connection string for DB migrations
+#
+# Optional environment variables:
+#   AZURE_RESOURCE_GROUP — Resource group for the web app
+#                          (auto-discovered from app name if omitted)
+# ─────────────────────────────────────────────────────────────────────────────
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Branch or tag to deploy to Production'
+        required: false
+        default: 'main'
+
+env:
+  AZURE_WEBAPP_NAME: Marketing-Resources
+  REGISTRY: ghcr.io
+  IMAGE_NAME: axlenet/Axle-Marketing-Resources
+  VITE_SUPABASE_PROJECT_ID: ${{ secrets.VITE_SUPABASE_PROJECT_ID }}
+  VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+  VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+  VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+  DESTINATION_DB_URL: ${{ secrets.DESTINATION_DB_URL }}
+  SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+jobs:
+  build-and-deploy:
+    name: Build, Push & Deploy
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.ref || github.ref }}
+
+      - name: Normalise image name to lowercase
+        run: echo "IMAGE_NAME=$(echo '${{ env.IMAGE_NAME }}' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Sync package-lock.json
+        if: hashFiles('package.json') != ''
+        run: |
+          # Regenerate the lock file in the runner workspace so Docker COPY
+          # picks up a file that is in sync with package.json.
+          # This fixes 'npm ci' failures when the lock file is stale or missing.
+          npm install --legacy-peer-deps --package-lock-only 2>/dev/null || \
+          npm install --legacy-peer-deps 2>/dev/null || true
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GHCR_PAT || secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=latest
+            type=sha,prefix=sha-
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          platforms: linux/amd64
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            VITE_SUPABASE_PROJECT_ID=${{ env.VITE_SUPABASE_PROJECT_ID }}
+            VITE_SUPABASE_ANON_KEY=${{ env.VITE_SUPABASE_ANON_KEY }}
+            VITE_SUPABASE_PUBLISHABLE_KEY=${{ env.VITE_SUPABASE_PUBLISHABLE_KEY }}
+            VITE_SUPABASE_URL=${{ env.VITE_SUPABASE_URL }}
+
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Configure Azure Web App settings
+        uses: azure/CLI@v2
+        with:
+          inlineScript: |
+            RG="${{ secrets.AZURE_RESOURCE_GROUP }}"
+            if [ -z "$RG" ]; then
+              RG=$(az webapp list --query "[?name=='${{ env.AZURE_WEBAPP_NAME }}'].resourceGroup" -o tsv)
+            fi
+            az webapp config appsettings set \
+              --name "${{ env.AZURE_WEBAPP_NAME }}" \
+              --resource-group "$RG" \
+              --settings \
+                VITE_SUPABASE_PROJECT_ID="${{ secrets.VITE_SUPABASE_PROJECT_ID }}" \
+                VITE_SUPABASE_ANON_KEY="${{ secrets.VITE_SUPABASE_ANON_KEY }}" \
+                VITE_SUPABASE_PUBLISHABLE_KEY="${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}" \
+                VITE_SUPABASE_URL="${{ secrets.VITE_SUPABASE_URL }}" \
+                DESTINATION_DB_URL="${{ secrets.DESTINATION_DB_URL }}" \
+                DATABASE_URL="${{ secrets.DESTINATION_DB_URL }}" \
+                SUPABASE_SERVICE_ROLE_KEY="${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+                WEBSITES_PORT="5000"
+
+      - name: Configure GHCR pull credentials on Azure Web App
+        uses: azure/CLI@v2
+        with:
+          inlineScript: |
+            # Resolve resource group — use the secret if set, otherwise discover it from the app name
+            RG="${{ secrets.AZURE_RESOURCE_GROUP }}"
+            if [ -z "$RG" ]; then
+              RG=$(az webapp list --query "[?name=='${{ env.AZURE_WEBAPP_NAME }}'].resourceGroup" -o tsv)
+            fi
+            GHCR_PAT="${{ secrets.GHCR_PAT }}"
+            if [ -n "$GHCR_PAT" ]; then
+              az webapp config container set \
+                --name "${{ env.AZURE_WEBAPP_NAME }}" \
+                --resource-group "$RG" \
+                --container-image-name "ghcr.io/${{ env.IMAGE_NAME }}:latest" \
+                --container-registry-url "https://ghcr.io" \
+                --container-registry-user "${{ github.actor }}" \
+                --container-registry-password "$GHCR_PAT"
+            else
+              echo "ℹ️  GHCR_PAT secret not set — updating image name only (registry credentials unchanged)"
+              az webapp config container set \
+                --name "${{ env.AZURE_WEBAPP_NAME }}" \
+                --resource-group "$RG" \
+                --container-image-name "ghcr.io/${{ env.IMAGE_NAME }}:latest"
+            fi
+
+      - name: Deploy to Azure Web App
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ env.AZURE_WEBAPP_NAME }}
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+
+      - name: Print deployment URL
+        run: echo "✅ Deployed to https://${{ env.AZURE_WEBAPP_NAME }}.azurewebsites.net"

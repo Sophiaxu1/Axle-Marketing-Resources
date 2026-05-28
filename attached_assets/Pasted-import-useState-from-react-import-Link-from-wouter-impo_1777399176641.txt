@@ -1,0 +1,442 @@
+import { useState } from "react";
+import { Link } from "wouter";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import {
+  ExternalLink,
+  ArrowRight,
+  Download,
+  ChevronDown,
+  ChevronUp,
+} from "lucide-react";
+import { requestItems, storeItems, brandList } from "@/lib/brand-data";
+import { motion } from "framer-motion";
+
+type LibraryAsset = { name: string; file: string; type: "image" | "video" };
+
+
+const requestImages = [
+  "/images/marketing-request.webp",
+  "/images/business-card-request.png",
+  "/images/event-support.png",
+];
+
+const storeImages = [
+  "/images/merch-store.png",
+  "/images/Axle_Promo_Booth.png",
+];
+
+const brandLogos: Record<string, { logo: string; bg: string }> = {
+  axlerator: { logo: "/images/logo-axlerator.png", bg: "#f5623d" },
+  axle: { logo: "/images/logo-axle.png", bg: "#4a2654" },
+  art: { logo: "/images/logo-art.png", bg: "#17052e" },
+  "axle-research-and-technologies": { logo: "/images/logo-art.png", bg: "#17052e" },
+};
+
+const fadeUp = {
+  hidden: { opacity: 0, y: 24 },
+  visible: (i: number) => ({
+    opacity: 1,
+    y: 0,
+    transition: { delay: i * 0.08, duration: 0.45, ease: "easeOut" },
+  }),
+};
+
+const sectionFade = {
+  hidden: { opacity: 0, y: 16 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    transition: { duration: 0.5, ease: "easeOut" },
+  },
+};
+
+function LibraryFolder({ folder, parentSlug }: { folder: { label: string; assets: LibraryAsset[] }; parentSlug: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const folderSlug = folder.label.toLowerCase().replace(/\s+/g, "-");
+  const previewCount = 4;
+  const hasMore = folder.assets.length > previewCount;
+  const visibleAssets = expanded ? folder.assets : folder.assets.slice(0, previewCount);
+
+  if (folder.assets.length === 0) {
+    return (
+      <div className="px-5 py-4">
+        <p className="text-sm font-medium mb-3" data-testid={`text-${parentSlug}-${folderSlug}`}>{folder.label}</p>
+        <div className="rounded border border-dashed border-border p-6 text-center">
+          <p className="text-sm text-muted-foreground">No images yet</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="px-5 py-4">
+      <div className="flex items-center justify-between mb-3">
+        <p className="text-sm font-medium" data-testid={`text-${parentSlug}-${folderSlug}`}>
+          {folder.label} ({folder.assets.length})
+        </p>
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        {visibleAssets.map((asset) => (
+          <div
+            key={asset.name}
+            className="group relative rounded border border-border overflow-hidden bg-muted/30"
+            data-testid={`asset-${parentSlug}-${asset.name}`}
+          >
+            {asset.type === "image" ? (
+              <>
+                <img
+                  src={asset.file}
+                  alt={asset.name}
+                  className="w-full h-20 object-cover"
+                  loading="lazy"
+                />
+                <a
+                  href={`/api/download?file=${encodeURIComponent(asset.file)}`}
+                  className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/40 transition-colors"
+                  data-testid={`download-${parentSlug}-${asset.name}`}
+                >
+                  <Download className="w-4 h-4 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                </a>
+              </>
+            ) : (
+              <div className="relative">
+                <video
+                  src={asset.file}
+                  controls
+                  preload="metadata"
+                  className="w-full h-20 object-cover bg-black"
+                />
+                <a
+                  href={`/api/download?file=${encodeURIComponent(asset.file)}`}
+                  className="absolute top-1 right-1 p-1 rounded bg-black/50 hover:bg-black/70 transition-colors"
+                  data-testid={`download-${parentSlug}-${asset.name}`}
+                >
+                  <Download className="w-3 h-3 text-white" />
+                </a>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+      {hasMore && (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="w-full mt-2 text-xs"
+          onClick={() => setExpanded(!expanded)}
+          data-testid={`btn-toggle-${parentSlug}-${folderSlug}`}
+        >
+          {expanded ? (
+            <>Show Less <ChevronUp className="w-3 h-3 ml-1" /></>
+          ) : (
+            <>Show All ({folder.assets.length}) <ChevronDown className="w-3 h-3 ml-1" /></>
+          )}
+        </Button>
+      )}
+    </div>
+  );
+}
+
+export default function Home() {
+  return (
+    <div className="min-h-screen bg-background" data-testid="page-home">
+      <section
+        className="relative overflow-hidden"
+        style={{
+          background:
+            "linear-gradient(135deg, #17052E 0%, #4A2654 50%, #2d1240 100%)",
+        }}
+      >
+        <div
+          className="absolute inset-0 opacity-30"
+          style={{
+            background:
+              "radial-gradient(ellipse at 70% 30%, rgba(245, 98, 61, 0.2) 0%, transparent 50%), radial-gradient(ellipse at 20% 80%, rgba(161, 219, 0, 0.1) 0%, transparent 40%)",
+          }}
+        />
+        <div className="relative max-w-6xl mx-auto px-6 py-24 md:py-32 text-center">
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6 }}
+          >
+            <span
+              className="inline-block px-4 py-1.5 rounded-full text-xs font-semibold tracking-wider uppercase mb-6"
+              style={{
+                background: "rgba(255,255,255,0.1)",
+                color: "rgba(255,255,255,0.7)",
+                border: "1px solid rgba(255,255,255,0.15)",
+              }}
+              data-testid="badge-hub"
+            >
+              Internal Resource App
+            </span>
+          </motion.div>
+          <motion.h1
+            className="text-4xl md:text-5xl lg:text-6xl font-bold text-white mb-4 tracking-tight"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.1 }}
+            data-testid="text-hero-title"
+          >
+            Marketing Resources
+          </motion.h1>
+          <motion.p
+            className="text-lg md:text-xl max-w-2xl mx-auto leading-relaxed"
+            style={{ color: "rgba(255,255,255,0.7)" }}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.2 }}
+            data-testid="text-hero-subtitle"
+          >
+            Your one-stop shop for brand assets, support requests, and
+            creative resources.
+          </motion.p>
+        </div>
+      </section>
+
+      <div className="max-w-6xl mx-auto px-6 py-16 space-y-20">
+        <motion.section
+          variants={sectionFade}
+          initial="hidden"
+          whileInView="visible"
+          viewport={{ once: true, margin: "-50px" }}
+        >
+          <div className="mb-8">
+            <h2
+              className="text-2xl font-bold tracking-tight"
+              data-testid="text-section-requests"
+            >
+              Submit a Request
+            </h2>
+            <p className="text-sm text-muted-foreground mt-1">
+              Get help from the Marketing Delivery Unit team
+            </p>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+            {requestItems.map((item, i) => (
+              <motion.div
+                key={item.title}
+                custom={i}
+                variants={fadeUp}
+                initial="hidden"
+                whileInView="visible"
+                viewport={{ once: true }}
+                className="flex"
+              >
+                <a
+                  href={item.link}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block group flex-1"
+                  data-testid={`link-request-${i}`}
+                >
+                  <Card className="h-full cursor-pointer border-border flex flex-col">
+                    <div className="relative h-40 overflow-hidden rounded-t-[calc(var(--radius)-1px)]">
+                      <img
+                        src={requestImages[i]}
+                        alt={item.title}
+                        className="w-full h-full object-cover"
+                      />
+                      <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <span className="flex items-center justify-center w-7 h-7 rounded-full bg-white/90 backdrop-blur-sm">
+                          <ExternalLink className="w-3.5 h-3.5 text-foreground" />
+                        </span>
+                      </div>
+                    </div>
+                    <CardContent className="p-5 flex-1 flex flex-col">
+                      <h3
+                        className="font-semibold text-base mb-1.5"
+                        data-testid={`text-request-title-${i}`}
+                      >
+                        {item.title}
+                      </h3>
+                      <p className="text-sm text-muted-foreground leading-relaxed">
+                        {item.description}
+                      </p>
+                    </CardContent>
+                  </Card>
+                </a>
+              </motion.div>
+            ))}
+          </div>
+        </motion.section>
+
+        <motion.section
+          variants={sectionFade}
+          initial="hidden"
+          whileInView="visible"
+          viewport={{ once: true, margin: "-50px" }}
+        >
+          <div className="mb-8">
+            <h2
+              className="text-2xl font-bold tracking-tight"
+              data-testid="text-section-store"
+            >
+              Order Branded Items
+            </h2>
+            <p className="text-sm text-muted-foreground mt-1">
+              Shop for branded merchandise and event swag
+            </p>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            {storeItems.map((item, i) => (
+              <motion.div
+                key={item.title}
+                custom={i}
+                variants={fadeUp}
+                initial="hidden"
+                whileInView="visible"
+                viewport={{ once: true }}
+              >
+                {item.link ? (
+                  <a
+                    href={item.link}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block group"
+                    data-testid={`link-store-${i}`}
+                  >
+                    <Card className="h-full cursor-pointer border-border relative">
+                      <div className="relative h-44 overflow-hidden rounded-t-[calc(var(--radius)-1px)]">
+                        <img
+                          src={storeImages[i]}
+                          alt={item.title}
+                          className="w-full h-full object-cover"
+                        />
+                        <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <span className="flex items-center justify-center w-7 h-7 rounded-full bg-white/90 backdrop-blur-sm">
+                            <ExternalLink className="w-3.5 h-3.5 text-foreground" />
+                          </span>
+                        </div>
+                      </div>
+                      <CardContent className="p-5">
+                        <h3
+                          className="font-semibold text-base mb-1.5"
+                          data-testid={`text-store-title-${i}`}
+                        >
+                          {item.title}
+                        </h3>
+                        <p className="text-sm text-muted-foreground leading-relaxed">
+                          {item.description}
+                        </p>
+                      </CardContent>
+                    </Card>
+                  </a>
+                ) : (
+                  <div className="block group">
+                    <Card className="h-full border-border relative">
+                      <div className="relative h-44 overflow-hidden rounded-t-[calc(var(--radius)-1px)]">
+                        <img
+                          src={storeImages[i]}
+                          alt={item.title}
+                          className="w-full h-full object-cover"
+                        />
+                        {item.comingSoon && (
+                          <div className="absolute inset-0 bg-black/20 flex items-center justify-center">
+                            <span
+                              className="inline-block px-4 py-1.5 rounded-full text-xs font-semibold tracking-wider uppercase"
+                              style={{
+                                background: "rgba(255,255,255,0.92)",
+                                color: "#F5623D",
+                              }}
+                              data-testid={`badge-coming-soon-${i}`}
+                            >
+                              Coming Soon
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                      <CardContent className="p-5">
+                        <h3
+                          className="font-semibold text-base mb-1.5"
+                          data-testid={`text-store-title-${i}`}
+                        >
+                          {item.title}
+                        </h3>
+                        <p className="text-sm text-muted-foreground leading-relaxed">
+                          {item.description}
+                        </p>
+                      </CardContent>
+                    </Card>
+                  </div>
+                )}
+              </motion.div>
+            ))}
+          </div>
+        </motion.section>
+
+        <motion.section
+          variants={sectionFade}
+          initial="hidden"
+          whileInView="visible"
+          viewport={{ once: true, margin: "-50px" }}
+        >
+          <div className="mb-8">
+            <h2
+              className="text-2xl font-bold tracking-tight"
+              data-testid="text-section-brands"
+            >
+              Brand Kits
+            </h2>
+            <p className="text-sm text-muted-foreground mt-1">
+              Access brand guidelines, logos, templates, and color palettes
+            </p>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+            {brandList.map((brand, i) => (
+              <motion.div
+                key={brand.id}
+                custom={i}
+                variants={fadeUp}
+                initial="hidden"
+                whileInView="visible"
+                viewport={{ once: true }}
+              >
+                <Link
+                  href={`/brand-kit/${brand.id}`}
+                  className="block group"
+                  data-testid={`link-brand-${brand.id}`}
+                >
+                  <Card className="h-full cursor-pointer border-border">
+                    <div
+                      className="relative h-40 overflow-hidden rounded-t-[calc(var(--radius)-1px)] flex items-center justify-center p-6"
+                      style={{ background: brandLogos[brand.id]?.bg }}
+                    >
+                      <img
+                        src={brandLogos[brand.id]?.logo}
+                        alt={brand.name}
+                        className="max-h-20 max-w-[80%] object-contain"
+                      />
+                      <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <span className="flex items-center justify-center w-7 h-7 rounded-full bg-white/20 backdrop-blur-sm">
+                          <ArrowRight className="w-3.5 h-3.5 text-white" />
+                        </span>
+                      </div>
+                    </div>
+                    <CardContent className="p-5">
+                      <h3
+                        className="font-semibold text-base"
+                        data-testid={`text-brand-name-${brand.id}`}
+                      >
+                        {brand.id === "art" ? "Axle Research and Technologies" : brand.name}
+                      </h3>
+                    </CardContent>
+                  </Card>
+                </Link>
+              </motion.div>
+            ))}
+          </div>
+        </motion.section>
+
+      </div>
+
+      <footer className="border-t py-8 mt-8" data-testid="footer">
+        <div className="max-w-6xl mx-auto px-6 text-center text-sm text-muted-foreground">
+          Axle Marketing Resources
+        </div>
+      </footer>
+    </div>
+  );
+}

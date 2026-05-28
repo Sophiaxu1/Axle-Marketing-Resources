@@ -1,0 +1,106 @@
+                          <div className="absolute inset-0 bg-black/20 flex items-center justify-center">
+                            <span
+                              className="inline-block px-4 py-1.5 rounded-full text-xs font-semibold tracking-wider uppercase"
+                              style={{
+                                background: "rgba(255,255,255,0.92)",
+                                color: "#F5623D",
+                              }}
+                              data-testid={`badge-coming-soon-${i}`}
+                            >
+                              Coming Soon
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                      <CardContent className="p-5">
+                        <h3
+                          className="font-semibold text-base mb-1.5"
+                          data-testid={`text-store-title-${i}`}
+                        >
+                          {item.title}
+                        </h3>
+                        <p className="text-sm text-muted-foreground leading-relaxed">
+                          {item.description}
+                        </p>
+                      </CardContent>
+                    </Card>
+                  </div>
+                )}
+              </motion.div>
+            ))}
+          </div>
+        </motion.section>
+
+        <motion.section
+          variants={sectionFade}
+          initial="hidden"
+          whileInView="visible"
+          viewport={{ once: true, margin: "-50px" }}
+        >
+          <div className="mb-8">
+            <h2
+              className="text-2xl font-bold tracking-tight"
+              data-testid="text-section-brands"
+            >
+              Brand Kits
+            </h2>
+            <p className="text-sm text-muted-foreground mt-1">
+              Access brand guidelines, logos, templates, and color palettes
+            </p>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+            {brandList.map((brand, i) => (
+              <motion.div
+                key={brand.id}
+                custom={i}
+                variants={fadeUp}
+                initial="hidden"
+                whileInView="visible"
+                viewport={{ once: true }}
+              >
+                <Link
+                  href={`/brand-kit/${brand.id}`}
+                  className="block group"
+                  data-testid={`link-brand-${brand.id}`}
+                >
+                  <Card className="h-full cursor-pointer border-border">
+                    <div
+                      className="relative h-40 overflow-hidden rounded-t-[calc(var(--radius)-1px)] flex items-center justify-center p-6"
+                      style={{ background: brandLogos[brand.id]?.bg }}
+                    >
+                      <img
+                        src={brandLogos[brand.id]?.logo}
+                        alt={brand.name}
+                        className="max-h-20 max-w-[80%] object-contain"
+                      />
+                      <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <span className="flex items-center justify-center w-7 h-7 rounded-full bg-white/20 backdrop-blur-sm">
+                          <ArrowRight className="w-3.5 h-3.5 text-white" />
+                        </span>
+                      </div>
+                    </div>
+                    <CardContent className="p-5">
+                      <h3
+                        className="font-semibold text-base"
+                        data-testid={`text-brand-name-${brand.id}`}
+                      >
+                        {brand.id === "art" ? "Axle Research and Technologies" : brand.name}
+                      </h3>
+                    </CardContent>
+                  </Card>
+                </Link>
+              </motion.div>
+            ))}
+          </div>
+        </motion.section>
+
+      </div>
+
+      <footer className="border-t py-8 mt-8" data-testid="footer">
+        <div className="max-w-6xl mx-auto px-6 text-center text-sm text-muted-foreground">
+          Axle Marketing Resources
+        </div>
+      </footer>
+    </div>
+  );
+}

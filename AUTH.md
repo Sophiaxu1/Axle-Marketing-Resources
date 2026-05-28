@@ -1,0 +1,190 @@
+# Authifi Integration — Marketing Resources App
+
+## Overview
+
+This application uses **Authifi (LS-Auth)** for authentication and authorization.
+Users sign in via the OIDC Authorization Code flow with PKCE. The backend validates
+JWTs issued by Authifi and checks the `scope` claim for RS Permissions.
+
+## Architecture
+
+```
+┌─────────────┐    OIDC     ┌─────────────┐
+│  React SPA  │ ──────────> │   Authifi   │
+│  (Vite)     │ <────────── │  (LS-Auth)  │
+└──────┬──────┘  id_token   └─────────────┘
+       │         access_token
+       │ Bearer
+       ▼
+┌──────────────┐
+│   Express    │  JWT validation via JWKS
+│   Backend    │  Permission checks via `scope` claim
+└──────────────┘
+```
+
+### Frontend (React + Vite)
+
+- **Library:** `react-oidc-context` + `oidc-client-ts`
+- **AuthProvider** wraps the entire app in `main.tsx`
+- **TokenSync** component keeps a module-level token store in sync
+- **AuthGate** in `App.tsx` shows Login page if unauthenticated
+- **ProtectedRoute** component for per-page permission guards
+- **usePermissions** hook for conditional UI rendering
+
+### Backend (Express 5 + TypeScript)
+
+- **Library:** `jose` (JWT verification against Authifi JWKS endpoint)
+- **Middleware:** `server/middleware/authifi.ts`
+  - `authenticate` — validates Bearer token, attaches `req.auth`
+  - `requirePermission(perm)` — returns `[authenticate, permCheck]` array
+  - `requireAnyPermission(...perms)` — OR-based permission check
+  - `requireMfa()` — requires MFA step-up (`amr` includes `"mfa"`)
+
+## Roles & Permissions
+
+| Role   | Description                                    |
+|--------|------------------------------------------------|
+| owner  | Full access — manage everything, delete app    |
+| editor | Content management — create/edit, no delete    |
+| user   | Read-only — view, download, copy, request      |
+
+### Permission Matrix (abbreviated)
+
+| Permission Area   | owner | editor | user |
+|-------------------|-------|--------|------|
+| assets (CRUD)     | ✅    | CRU    | R    |
+| brands (CRUD)     | ✅    | CRU    | R    |
+| colors (CRUD+copy)| ✅    | CRU+copy | R+copy |
+| images (CRUD)     | ✅    | CU     | R    |
+| templates (CRUD)  | ✅    | CRU    | R    |
+| requests          | ✅    | view+create | view+create |
+| settings          | ✅    | ❌     | ❌   |
+| users             | ✅    | ❌     | ❌   |
+| app.delete        | ✅    | ❌     | ❌   |
+
+See `authifi-provisioning-plan.json` for the full permission list.
+
+## User Groups
+
+| Group               | Role Assigned |
+|----------------------|---------------|
+| axle-marketing-owners | owner        |
+| axle-marketing-team   | editor       |
+| axle-employees        | user         |
+
+## Setup Instructions
+
+### 1. Provision the Authifi Tenant
+
+Run the provisioning plan via the Authifi admin API or the Authifi Agent.
+This creates:
+- OAuth Client (PKCE, public)
+- Resource Server (`https://api.axle-marketing-resources.com`)
+- 30 RS Permissions
+- 3 Access Roles (owner, editor, user)
+- 3 User Groups
+- Owner admin assignment
+
+### 2. Configure Environment Variables
+
+Copy `.env.example` to `.env` and fill in:
+
+```bash
+cp .env.example .env
+```
+
+Required values from provisioning:
+- `VITE_AUTHIFI_CLIENT_ID` — the OAuth client ID created by provisioning
+- `<TENANT_NAME>` — replace in the AUTHIFI_AUTHORITY URLs with your tenant name
+
+### 3. Install Dependencies
+
+```bash
+npm install
+```
+
+### 4. Run the App
+
+```bash
+npm run dev
+```
+
+The app runs on `http://localhost:3000` (set `PORT=3000` in `.env`).
+
+### 5. Test the Login Flow
+
+1. Open `http://localhost:3000`
+2. You should see the Login page
+3. Click "Sign In" → redirected to Authifi
+4. Authenticate with your identity provider
+5. Redirected back to the app → Home page renders
+
+## Token Lifecycle
+
+| Event              | Handling                                        |
+|--------------------|-------------------------------------------------|
+| Initial login      | `auth.signinRedirect()` → Authifi authorize     |
+| Callback           | `onSigninCallback` → navigate to `/`            |
+| Token storage      | `sessionStorage` (cleared on tab close)         |
+| Token refresh      | `automaticSilentRenew: true` (oidc-client-ts)   |
+| Logout             | `auth.signoutRedirect()` → Authifi end_session  |
+| Expired token (API)| Backend returns 401 → frontend can re-login     |
+
+## Key Files
+
+| File | Purpose |
+|------|---------|
+| `client/src/auth/authConfig.ts` | OIDC configuration |
+| `client/src/auth/tokenStore.ts` | Module-level token store |
+| `client/src/auth/ProtectedRoute.tsx` | Route guard component |
+| `client/src/auth/usePermissions.ts` | Permission hook + constants |
+| `client/src/pages/login.tsx` | Login page |
+| `client/src/pages/unauthorized.tsx` | Access denied page |
+| `client/src/App.tsx` | AuthGate + TokenSync |
+| `client/src/main.tsx` | AuthProvider wrapper |
+| `client/src/lib/queryClient.ts` | Bearer token on API calls |
+| `server/middleware/authifi.ts` | JWT validation middleware |
+| `server/routes.ts` | Protected routes |
+| `shared/schema.ts` | Authifi-compatible user schema |
+| `.env.example` | Environment variables template |
+
+## Security Notes
+
+- **Backend validates, frontend decorates.** Frontend permission checks
+  (ProtectedRoute, usePermissions) are for UX only. The backend independently
+  validates JWTs and checks scopes.
+
+- **Asset proxy endpoints** (`/api/asset`, `/api/download`) are public because
+  they serve `<img>` and `<a>` tags that cannot carry Bearer tokens. Security
+  is provided by Supabase signed URL expiry (1 hour) and path validation.
+
+- **All other API endpoints** require a valid JWT with the appropriate permission.
+
+- **PKCE** is used (public client, `tokenEndpointAuthMethod: "none"`). No
+  client secret is stored in the frontend.
+
+## Adding New Protected Routes
+
+### Backend
+
+```typescript
+// In server/routes.ts
+app.post("/api/brands", ...requirePermission("marketingresources.brands.create"), async (req, res) => {
+  // req.auth contains the decoded JWT claims
+  const userId = req.auth!.sub;
+  // ... handler logic
+});
+```
+
+### Frontend
+
+```tsx
+// Per-page guard
+<ProtectedRoute requiredPermission="marketingresources.settings.view">
+  <SettingsPage />
+</ProtectedRoute>
+
+// Conditional UI
+const { hasPermission } = usePermissions();
+{hasPermission("marketingresources.brands.delete") && <DeleteButton />}
+```

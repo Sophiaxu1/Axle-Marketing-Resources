@@ -1,0 +1,180 @@
+              const groups: { label: string; logos: typeof brand.logos }[] = [];
+              brand.logos.forEach((logo) => {
+                const groupLabel = logo.group || "Other";
+                let group = groups.find((g) => g.label === groupLabel);
+                if (!group) {
+                  group = { label: groupLabel, logos: [] };
+                  groups.push(group);
+                }
+                group.logos.push(logo);
+              });
+              let globalIdx = 0;
+              return (
+                <div className="space-y-8">
+                  {groups.map((group) => (
+                    <div key={group.label}>
+                      <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4">
+                        {group.label}
+                      </h3>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+                        {group.logos.map((logo) => {
+                          const idx = globalIdx++;
+                          return (
+                            <LogoCard key={logo.name} logo={logo} idx={idx} />
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              );
+            }
+            return (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+                {brand.logos.map((logo, i) => (
+                  <LogoCard key={logo.name} logo={logo} idx={i} />
+                ))}
+              </div>
+            );
+          })()}
+        </motion.section>
+
+        <motion.section
+          variants={sectionFade}
+          initial="hidden"
+          whileInView="visible"
+          viewport={{ once: true }}
+        >
+          <SectionHeader title="Typography" />
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+            {brand.fonts.map((font) => (
+              <Card key={font.name} className="border-border">
+                <CardContent className="p-6">
+                  <div className="mb-5 space-y-1">
+                    {font.variants.map((variant) => (
+                      <p
+                        key={variant}
+                        className="text-lg leading-snug"
+                        style={{
+                          fontFamily: font.fontFamily,
+                          fontWeight: fontWeight(variant),
+                          fontStyle: fontStyle(variant),
+                        }}
+                        data-testid={`text-font-${font.name.replace(/\s/g, "-")}-${variant.replace(/\s/g, "-")}`}
+                      >
+                        {font.name} {variant}
+                      </p>
+                    ))}
+                  </div>
+                  <a
+                    href={font.link}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    data-testid={`link-font-${font.name.replace(/\s/g, "-")}`}
+                  >
+                    <Button size="sm" variant="outline" className="w-full">
+                      <ExternalLink className="w-3.5 h-3.5 mr-1.5" />
+                      Download {font.name}
+                    </Button>
+                  </a>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </motion.section>
+
+        <motion.section
+          variants={sectionFade}
+          initial="hidden"
+          whileInView="visible"
+          viewport={{ once: true }}
+        >
+          <SectionHeader title="Templates" />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+            {brand.templates.map((template, i) => (
+              <Card key={template.name} className="border-border">
+                <CardContent className="p-5 flex items-center justify-between gap-4">
+                  <span className="text-sm font-medium" data-testid={`text-template-name-${i}`}>
+                    {template.name}
+                  </span>
+                  {template.file ? (
+                    <a href={`/api/download?file=${encodeURIComponent(template.file)}`} data-testid={`button-download-template-${i}`}>
+                      <Button size="sm" variant="outline">
+                        <Download className="w-3.5 h-3.5 mr-1.5" />
+                        Download
+                      </Button>
+                    </a>
+                  ) : (
+                    <Button size="sm" variant="outline" data-testid={`button-download-template-${i}`}>
+                      <Download className="w-3.5 h-3.5 mr-1.5" />
+                      Download
+                    </Button>
+                  )}
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </motion.section>
+
+        <motion.section
+          variants={sectionFade}
+          initial="hidden"
+          whileInView="visible"
+          viewport={{ once: true }}
+        >
+          <SectionHeader title="Color Palette" />
+          <div className="space-y-8">
+            {brand.colorGroups.map((group) => (
+              <div key={group.label}>
+                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4" data-testid={`text-color-group-${group.label.replace(/\s/g, "-")}`}>
+                  {group.label}
+                </h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {group.colors.map((color) => (
+                    <ColorSwatch
+                      key={color.hex}
+                      name={color.name}
+                      hex={color.hex}
+                    />
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </motion.section>
+
+        {brand.libraryFolders && brand.libraryFolders.length > 0 && (
+          <motion.section
+            variants={sectionFade}
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true }}
+          >
+            <SectionHeader title="Image Library" />
+            <div className="space-y-4">
+              {brand.libraryFolders.map((folder) => (
+                <LibraryFolderCard key={folder.label} folder={folder} primaryColor={brand.primaryColor} />
+              ))}
+            </div>
+          </motion.section>
+        )}
+      </div>
+
+      <footer className="border-t py-8 mt-8" data-testid="footer">
+        <div className="max-w-6xl mx-auto px-6 flex flex-wrap items-center justify-between gap-4">
+          <span className="text-sm text-muted-foreground">
+            {brand.name} Brand Kit
+          </span>
+          <Link
+            href="/"
+            className="text-sm font-medium text-muted-foreground inline-flex items-center gap-1.5"
+            data-testid="link-footer-home"
+          >
+            <ArrowLeft className="w-3.5 h-3.5" />
+            Back to Marketing Resources
+          </Link>
+        </div>
+      </footer>
+    </div>
+  );
+}
