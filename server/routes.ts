@@ -4,6 +4,9 @@ import {
   authenticate,
   requirePermission,
   requireAnyPermission,
+  requireRole,
+  getAuthzContext,
+  highestAppRole,
 } from "./middleware/authifi";
 
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL || "";
@@ -19,6 +22,52 @@ const folderMap: Record<string, string> = {
 
 function encodePath(path: string): string {
   return path.split("/").map(encodeURIComponent).join("/");
+}
+
+// Canonical scopes granted to each Access Role, per the provisioning spec
+// (Marketing-Resources-Final-Phase.pdf). Returned by /api/me so the frontend
+// can gate per-control UI from the authoritative role rather than the token.
+const ROLE_SCOPES: Record<string, string[]> = {
+  owner: [
+    "axlemarketingresources.assets.view",
+    "axlemarketingresources.assets.download",
+    "axlemarketingresources.assets.upload",
+    "axlemarketingresources.assets.delete",
+    "axlemarketingresources.brands.view",
+    "axlemarketingresources.brands.edit",
+    "axlemarketingresources.brands.create",
+    "axlemarketingresources.brands.delete",
+    "axlemarketingresources.images.view",
+    "axlemarketingresources.images.upload",
+    "axlemarketingresources.images.delete",
+    "axlemarketingresources.requests.view",
+    "axlemarketingresources.requests.create",
+    "axlemarketingresources.settings.view",
+    "axlemarketingresources.settings.manage",
+    "axlemarketingresources.users.manage",
+  ],
+  editor: [
+    "axlemarketingresources.assets.view",
+    "axlemarketingresources.assets.download",
+    "axlemarketingresources.assets.upload",
+    "axlemarketingresources.brands.view",
+    "axlemarketingresources.brands.edit",
+    "axlemarketingresources.images.view",
+    "axlemarketingresources.images.upload",
+    "axlemarketingresources.requests.view",
+  ],
+  user: [
+    "axlemarketingresources.assets.view",
+    "axlemarketingresources.assets.download",
+    "axlemarketingresources.brands.view",
+    "axlemarketingresources.images.view",
+    "axlemarketingresources.requests.view",
+    "axlemarketingresources.requests.create",
+  ],
+};
+
+function scopesForRole(role: string): string[] {
+  return ROLE_SCOPES[role] ?? [];
 }
 
 async function signObject(path: string, download = false): Promise<string | null> {
@@ -149,6 +198,79 @@ export async function registerRoutes(
       }
     }
   );
+
+  // -----------------------------------------------------------------------
+  // Example endpoints backing the Editor and Admin pages.
+  // Each is independently guarded — the frontend gating is UX only.
+  // -----------------------------------------------------------------------
+
+  /**
+   * Returns the caller's identity + authorization as seen by the server.
+   * Roles come from the Authifi Access Roles (`resource_roles` claim, falling
+   * back to the /me endpoint); scopes are derived from the resolved role.
+   * The frontend uses this as the single source of truth for gating.
+   */
+  app.get("/api/me", authenticate, async (req, res) => {
+    const { roleIds, groups, appRoles } = await getAuthzContext(req);
+    const role = highestAppRole(appRoles);
+    res.json({
+      sub: req.auth?.sub,
+      email: req.auth?.email,
+      name: req.auth?.name,
+      resource_roles: roleIds,
+      roles: appRoles,
+      role,
+      groups,
+      scopes: scopesForRole(role),
+    });
+  });
+
+  /**
+   * Save editable content (demo). Echoes the payload back.
+   * Role: editor or owner.
+   */
+  app.put(
+    "/api/editor/content",
+    ...requireRole("editor", "owner"),
+    (req, res) => {
+      res.json({ ok: true, saved: req.body });
+    },
+  );
+
+  /**
+   * List users for the admin dashboard. Returns an empty list — this app has
+   * no local users table (Authifi owns identity). Wire this to the Authifi
+   * admin API to list real group members.
+   * Role: owner.
+   */
+  app.get(
+    "/api/admin/users",
+    ...requireRole("owner"),
+    (_req, res) => {
+      res.json([]);
+    },
+  );
+
+  /**
+   * Update application settings (demo). Echoes the payload back.
+   * Role: owner.
+   */
+  app.put(
+    "/api/admin/settings",
+    ...requireRole("owner"),
+    (req, res) => {
+      res.json({ ok: true, settings: req.body });
+    },
+  );
+
+  /**
+   * Delete the application (demo — performs no destructive action).
+   * Not tied to any Authifi scope: the canonical model has no app.delete
+   * permission, so this endpoint only requires a valid token.
+   */
+  app.delete("/api/admin/app", authenticate, (_req, res) => {
+    res.json({ ok: true, message: "App deletion acknowledged (demo — nothing was deleted)." });
+  });
 
   // -----------------------------------------------------------------------
   // FUTURE ENDPOINTS — add with the correct permission guards

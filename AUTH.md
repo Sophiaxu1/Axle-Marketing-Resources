@@ -188,3 +188,57 @@ app.post("/api/brands", ...requirePermission("marketingresources.brands.create")
 const { hasPermission } = usePermissions();
 {hasPermission("marketingresources.brands.delete") && <DeleteButton />}
 ```
+
+## Example Pages: Editor & Admin
+
+Two example pages demonstrate end-to-end role + permission gating. They use the
+**canonical `axlemarketingresources.*` scopes** from the provisioning spec
+(`Marketing-Resources-Final-Phase.pdf`), exposed via the `SCOPE` constant in
+`usePermissions.ts`. (The legacy `P` constants / `marketingresources.*`
+namespace remain in use by the rest of the app.)
+
+### Roles & groups (per the provisioning spec)
+
+| Group | Role |
+|-------|------|
+| `axle-marketing-owners` | Owner |
+| `axle-marketing-team` | Editor |
+| `axle-employees` | User |
+
+Authorization is **role-based, sourced from `GET /api/me`** (the single source
+of truth). The server resolves the role from **both** the Authifi **Access
+Roles** (`resource_roles`) **and** the user's **groups** — whichever grants the
+higher role wins, so membership in `axle-marketing-owners` resolves to `owner`
+even if `resource_roles` only carries an editor role. Token claims are read
+first, falling back to a server-side call to the Authifi `/me` endpoint
+(`server/middleware/authifi.ts` → `getAuthzContext` / `requireRole`).
+`/api/me` returns `{ role, roles, resource_roles, groups, scopes }`, where
+`scopes` are the canonical scopes granted to the resolved role.
+
+On the client, `useMe()` (`client/src/auth/me.ts`) fetches `/api/me`; `useRole()`
+and `usePermissions()` both read from it. Calling our backend (not Authifi `/me`
+directly) avoids browser CORS against the tenant.
+
+### Navigation
+
+`AppHeader` (`client/src/components/AppHeader.tsx`) renders on every
+authenticated page. The **Editor** and **Admin** links appear when the user has
+the matching **role** (from `/api/me`) OR any permission in `EDITOR_PERMS` /
+`ADMIN_PERMS`.
+
+### Pages
+
+| Page | Route | Frontend guard (role OR permission) | Per-control gating |
+|------|-------|----------------|--------------------|
+| Editor | `/editor` | `requiredRoles={["editor","owner"]}` or any `EDITOR_PERMS` | edit → `brands.edit`; create → `brands.create`; upload → `assets.upload`/`images.upload`; delete → `assets.delete`/`brands.delete`/`images.delete` |
+| Admin  | `/admin`  | `requiredRoles={["owner"]}` or any `ADMIN_PERMS` | users → `users.manage`; settings view/manage → `settings.view`/`settings.manage`; danger zone → ungated demo |
+
+### Example endpoints (`server/routes.ts`) — role-enforced
+
+| Endpoint | Required role |
+|----------|------|
+| `GET /api/me` | any valid token |
+| `PUT /api/editor/content` | editor or owner |
+| `GET /api/admin/users` | owner |
+| `PUT /api/admin/settings` | owner |
+| `DELETE /api/admin/app` | any valid token (no `app.delete` role/scope — demo, deletes nothing) |

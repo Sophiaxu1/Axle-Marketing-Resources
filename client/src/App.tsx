@@ -6,9 +6,14 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { setAccessToken } from "@/auth/tokenStore";
+import { ProtectedRoute } from "@/auth/ProtectedRoute";
+import { EDITOR_PERMS, ADMIN_PERMS } from "@/auth/usePermissions";
+import { AppHeader } from "@/components/AppHeader";
 import NotFound from "@/pages/not-found";
 import Home from "@/pages/home";
 import BrandKit from "@/pages/brand-kit";
+import Editor from "@/pages/editor";
+import Admin from "@/pages/admin";
 import Login from "@/pages/login";
 import Unauthorized from "@/pages/unauthorized";
 
@@ -49,14 +54,27 @@ function AuthGate() {
   }
 
   return (
-    <Switch>
-      <Route path="/" component={Home} />
-      <Route path="/brand-kit/:brandId" component={BrandKit} />
-      <Route path="/unauthorized" component={Unauthorized} />
-      {/* The OIDC callback URL is handled by react-oidc-context's
-          onSigninCallback before this route tree renders. */}
-      <Route component={NotFound} />
-    </Switch>
+    <>
+      <AppHeader />
+      <Switch>
+        <Route path="/" component={Home} />
+        <Route path="/brand-kit/:brandId" component={BrandKit} />
+        <Route path="/editor">
+          <ProtectedRoute requiredRoles={["editor", "owner"]} requiredPermissions={EDITOR_PERMS}>
+            <Editor />
+          </ProtectedRoute>
+        </Route>
+        <Route path="/admin">
+          <ProtectedRoute requiredRoles={["owner"]} requiredPermissions={ADMIN_PERMS}>
+            <Admin />
+          </ProtectedRoute>
+        </Route>
+        <Route path="/unauthorized" component={Unauthorized} />
+        {/* The OIDC callback URL is handled by react-oidc-context's
+            onSigninCallback before this route tree renders. */}
+        <Route component={NotFound} />
+      </Switch>
+    </>
   );
 }
 

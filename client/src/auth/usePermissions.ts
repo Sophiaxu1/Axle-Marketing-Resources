@@ -10,12 +10,15 @@
  */
 
 import { useAuth } from "react-oidc-context";
+import { useMe } from "./me";
 
 export function usePermissions() {
   const auth = useAuth();
 
-  const scopes: string[] =
-    (auth.user?.profile?.scope as string)?.split(" ") ?? [];
+  // Scopes come from /api/me, derived server-side from the user's Access Role.
+  // This keeps per-control UI gating consistent with role-based API enforcement.
+  const { data } = useMe();
+  const scopes: string[] = data?.scopes ?? [];
 
   return {
     /** True if the user has the exact permission. */
@@ -74,3 +77,51 @@ export const P = {
   TEMPLATES_DELETE: "marketingresources.templates.delete",
   TEMPLATES_DOWNLOAD: "marketingresources.templates.download",
 } as const;
+
+// ---------------------------------------------------------------------------
+// Canonical Authifi scopes (axlemarketingresources.*) — per the provisioning
+// spec in Marketing-Resources-Final-Phase.pdf. These are the scopes Authifi
+// actually issues in the token, and are used by the example Editor/Admin
+// pages. (The `P` constants above use the legacy `marketingresources.*`
+// namespace still referenced elsewhere in the app.)
+// ---------------------------------------------------------------------------
+
+export const SCOPE = {
+  ASSETS_VIEW: "axlemarketingresources.assets.view",
+  ASSETS_DOWNLOAD: "axlemarketingresources.assets.download",
+  ASSETS_UPLOAD: "axlemarketingresources.assets.upload",
+  ASSETS_DELETE: "axlemarketingresources.assets.delete",
+  BRANDS_VIEW: "axlemarketingresources.brands.view",
+  BRANDS_EDIT: "axlemarketingresources.brands.edit",
+  BRANDS_CREATE: "axlemarketingresources.brands.create",
+  BRANDS_DELETE: "axlemarketingresources.brands.delete",
+  IMAGES_VIEW: "axlemarketingresources.images.view",
+  IMAGES_UPLOAD: "axlemarketingresources.images.upload",
+  IMAGES_DELETE: "axlemarketingresources.images.delete",
+  REQUESTS_VIEW: "axlemarketingresources.requests.view",
+  REQUESTS_CREATE: "axlemarketingresources.requests.create",
+  SETTINGS_VIEW: "axlemarketingresources.settings.view",
+  SETTINGS_MANAGE: "axlemarketingresources.settings.manage",
+  USERS_MANAGE: "axlemarketingresources.users.manage",
+} as const;
+
+// ---------------------------------------------------------------------------
+// Grouped permission sets — used to gate the example Editor and Admin pages
+// (and their nav links). A user needs at least ONE permission in a set to
+// see the corresponding page.
+// ---------------------------------------------------------------------------
+
+/** Permissions that grant access to the Editor page (editor or owner role). */
+export const EDITOR_PERMS: string[] = [
+  SCOPE.BRANDS_EDIT,
+  SCOPE.BRANDS_CREATE,
+  SCOPE.ASSETS_UPLOAD,
+  SCOPE.IMAGES_UPLOAD,
+];
+
+/** Permissions that grant access to the Admin page (owner role). */
+export const ADMIN_PERMS: string[] = [
+  SCOPE.SETTINGS_VIEW,
+  SCOPE.SETTINGS_MANAGE,
+  SCOPE.USERS_MANAGE,
+];

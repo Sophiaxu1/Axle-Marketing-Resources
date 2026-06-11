@@ -41,7 +41,10 @@ export const oidcConfig: AuthProviderProps = {
       }
     : {}),
 
-  extraQueryParams: audience ? { resource: audience } : undefined,
+  extraQueryParams: {
+    ...(audience ? { resource: audience } : {}),
+    acr_values: "idp:2498",
+  },
 
   userStore: new WebStorageStateStore({ store: window.sessionStorage }),
 
