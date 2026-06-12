@@ -108,19 +108,18 @@ export async function registerRoutes(
 ): Promise<Server> {
 
   // -----------------------------------------------------------------------
-  // PUBLIC — no authentication required
+  // ASSET PROXIES
+  //
+  // These serve `<img src>` / `<a href>` targets, which browsers cannot
+  // attach a Bearer token to. They redirect to short-lived Supabase signed
+  // URLs and are restricted by a strict path allowlist (validPath). NOTE:
+  // these remain unauthenticated by necessity of the <img>/<a> mechanism;
+  // hardening them further (authenticated fetch → blob, or capability tokens)
+  // is tracked separately. The Supabase URL is NOT exposed via any endpoint.
   // -----------------------------------------------------------------------
-
-  /** Runtime config (Supabase URL). Called during app initialisation. */
-  app.get("/api/config", (_req, res) => {
-    res.json({ supabaseUrl: SUPABASE_URL });
-  });
 
   /**
    * Asset proxy — returns a temporary Supabase signed URL via redirect.
-   * Used as `<img src>` in the frontend; browsers cannot attach Bearer
-   * tokens to <img> requests, so this endpoint is public. Security is
-   * provided by Supabase signed URL expiry (1 h) and path validation.
    */
   app.get("/api/asset", async (req, res) => {
     const path = req.query.path;

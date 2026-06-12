@@ -21,18 +21,31 @@ import type { Request, Response, NextFunction } from "express";
 const AUTHORITY = process.env.AUTHIFI_AUTHORITY || "";
 const AUDIENCE = process.env.AUTHIFI_AUDIENCE || "";
 
+/**
+ * Fail closed: both the issuer and audience must be configured, otherwise
+ * jwtVerify would skip aud/iss validation and accept tokens from any issuer
+ * or for any audience. Called before every verification.
+ */
+function assertAuthConfig(): void {
+  if (!AUTHORITY) {
+    throw new Error(
+      "AUTHIFI_AUTHORITY is not set — refusing to validate tokens without an issuer.",
+    );
+  }
+  if (!AUDIENCE) {
+    throw new Error(
+      "AUTHIFI_AUDIENCE is not set — refusing to validate tokens without an audience.",
+    );
+  }
+}
+
 // Lazily create the JWKS fetcher so the middleware file can be imported even
 // when env vars are not yet set (e.g. during build).
 let _jwks: ReturnType<typeof createRemoteJWKSet> | null = null;
 
 function getJWKS() {
   if (!_jwks) {
-    if (!AUTHORITY) {
-      throw new Error(
-        "AUTHIFI_AUTHORITY environment variable is not set. " +
-          "JWT validation cannot proceed.",
-      );
-    }
+    assertAuthConfig();
     _jwks = createRemoteJWKSet(
       new URL(`${AUTHORITY}/.well-known/jwks.json`),
     );
@@ -199,9 +212,10 @@ export async function authenticate(
   const token = authHeader.slice(7);
 
   try {
+    assertAuthConfig();
     const { payload } = await jwtVerify(token, getJWKS(), {
-      audience: AUDIENCE || undefined,
-      issuer: AUTHORITY || undefined,
+      audience: AUDIENCE,
+      issuer: AUTHORITY,
       algorithms: ["RS256"],
     });
 

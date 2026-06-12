@@ -154,11 +154,22 @@ The app runs on `http://localhost:3000` (set `PORT=3000` in `.env`).
   (ProtectedRoute, usePermissions) are for UX only. The backend independently
   validates JWTs and checks scopes.
 
-- **Asset proxy endpoints** (`/api/asset`, `/api/download`) are public because
-  they serve `<img>` and `<a>` tags that cannot carry Bearer tokens. Security
-  is provided by Supabase signed URL expiry (1 hour) and path validation.
+- **Fail closed on config.** Token validation requires both `AUTHIFI_AUTHORITY`
+  and `AUTHIFI_AUDIENCE`; if either is unset the middleware throws rather than
+  skipping `aud`/`iss` validation (`assertAuthConfig`).
 
-- **All other API endpoints** require a valid JWT with the appropriate permission.
+- **No config endpoint.** The Supabase URL is not exposed via any runtime
+  endpoint (the former public `GET /api/config` was removed); the server holds
+  it as a server-only env var.
+
+- **Asset proxy endpoints** (`/api/asset`, `/api/download`) remain
+  unauthenticated because they serve `<img>` and `<a>` tags that cannot carry
+  Bearer tokens; they are restricted by a strict path allowlist and short-lived
+  Supabase signed URLs. KNOWN GAP (IAM review): an unauthenticated caller can
+  still obtain signed URLs for allowed-prefix paths. Hardening (authenticated
+  fetch → blob, or capability tokens) is a tracked follow-up.
+
+- **All other API endpoints** require a valid JWT with the appropriate role/permission.
 
 - **PKCE** is used (public client, `tokenEndpointAuthMethod: "none"`). No
   client secret is stored in the frontend.
