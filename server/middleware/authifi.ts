@@ -21,18 +21,31 @@ import type { Request, Response, NextFunction } from "express";
 const AUTHORITY = process.env.AUTHIFI_AUTHORITY || "";
 const AUDIENCE = process.env.AUTHIFI_AUDIENCE || "";
 
+/**
+ * Fail closed: both the issuer and audience must be configured, otherwise
+ * jwtVerify would skip aud/iss validation and accept tokens from any issuer
+ * or for any audience. Called before every verification.
+ */
+function assertAuthConfig(): void {
+  if (!AUTHORITY) {
+    throw new Error(
+      "AUTHIFI_AUTHORITY is not set — refusing to validate tokens without an issuer.",
+    );
+  }
+  if (!AUDIENCE) {
+    throw new Error(
+      "AUTHIFI_AUDIENCE is not set — refusing to validate tokens without an audience.",
+    );
+  }
+}
+
 // Lazily create the JWKS fetcher so the middleware file can be imported even
 // when env vars are not yet set (e.g. during build).
 let _jwks: ReturnType<typeof createRemoteJWKSet> | null = null;
 
 function getJWKS() {
   if (!_jwks) {
-    if (!AUTHORITY) {
-      throw new Error(
-        "AUTHIFI_AUTHORITY environment variable is not set. " +
-          "JWT validation cannot proceed.",
-      );
-    }
+    assertAuthConfig();
     _jwks = createRemoteJWKSet(
       new URL(`${AUTHORITY}/.well-known/jwks.json`),
     );
@@ -51,6 +64,10 @@ export interface AuthifiClaims extends JWTPayload {
   scope?: string;
   groups?: string[];
   amr?: string[];
+  /** Authifi Access Roles, when projected into the token. May be a flat list
+   *  of role IDs or an object keyed by Resource Server identifier. */
+  resource_roles?: string[] | Record<string, string[]>;
+  roles?: string[];
 }
 
 // Augment the Express Request type so `req.auth` is available downstream.
@@ -60,6 +77,116 @@ declare global {
       auth?: AuthifiClaims;
     }
   }
+}
+
+// ---------------------------------------------------------------------------
+// Access Role resolution — from Authifi Access Roles (`resource_roles`) AND
+// User Groups, per the provisioning spec. Whichever grants the higher role
+// wins, so e.g. membership in the owners group resolves to owner even if the
+// token only surfaces an editor Access Role.
+// ---------------------------------------------------------------------------
+
+export type AppRole = "owner" | "editor" | "user";
+
+const ME_URL = AUTHORITY ? `${AUTHORITY}/me` : "";
+
+const ROLE_ID_TO_APP_ROLE: Record<string, AppRole> = {
+  "AxleMarketingResources-Role-Owner": "owner",
+  "AxleMarketingResources-Role-Editor": "editor",
+  "AxleMarketingResources-Role-User": "user",
+  owner: "owner",
+  editor: "editor",
+  user: "user",
+};
+
+// User Group → app role (PDF long forms + short-form aliases).
+const GROUP_TO_APP_ROLE: Record<string, AppRole> = {
+  "AxleMarketingResources-marketing-owners": "owner",
+  "AxleMarketingResources-marketing-team": "editor",
+  "AxleMarketingResources-axle-employees": "user",
+  "axle-marketing-owners": "owner",
+  "axle-marketing-team": "editor",
+  "axle-employees": "user",
+};
+
+const ROLE_RANK: Record<AppRole, number> = { user: 0, editor: 1, owner: 2 };
+
+function toStringArray(value: unknown): string[] {
+  if (Array.isArray(value)) return value.filter((x): x is string => typeof x === "string");
+  if (typeof value === "string") return value.split(/[\s,]+/).filter(Boolean);
+  return [];
+}
+
+/** Normalize a `resource_roles` claim (array, RS-keyed object, or string). */
+function normalizeResourceRoles(rr: unknown): string[] {
+  if (rr && typeof rr === "object" && !Array.isArray(rr)) {
+    const obj = rr as Record<string, unknown>;
+    const forAudience = AUDIENCE && Array.isArray(obj[AUDIENCE]) ? (obj[AUDIENCE] as unknown[]) : null;
+    const values = forAudience ?? Object.values(obj).flat();
+    return values.filter((x): x is string => typeof x === "string");
+  }
+  return toStringArray(rr);
+}
+
+// Short-lived cache of /me lookups, keyed by access token, to avoid calling
+// Authifi /me on every protected request.
+const meCache = new Map<string, { data: Record<string, unknown>; ts: number }>();
+const ME_CACHE_TTL_MS = 60_000;
+
+async function fetchMe(token: string): Promise<Record<string, unknown> | null> {
+  if (!ME_URL) return null;
+  const cached = meCache.get(token);
+  if (cached && Date.now() - cached.ts < ME_CACHE_TTL_MS) return cached.data;
+  try {
+    const res = await fetch(ME_URL, { headers: { Authorization: `Bearer ${token}` } });
+    if (!res.ok) return null;
+    const data = (await res.json()) as Record<string, unknown>;
+    meCache.set(token, { data, ts: Date.now() });
+    return data;
+  } catch {
+    return null;
+  }
+}
+
+export interface AuthzContext {
+  /** Raw Access Role IDs (resource_roles). */
+  roleIds: string[];
+  /** Raw user groups. */
+  groups: string[];
+  /** Distinct app roles resolved from both roles and groups. */
+  appRoles: AppRole[];
+}
+
+/**
+ * Resolve roles + groups for a request. Reads the token claims first; if the
+ * token carries neither resource_roles nor groups, falls back to Authifi /me.
+ */
+export async function getAuthzContext(req: Request): Promise<AuthzContext> {
+  let roleIds = normalizeResourceRoles(req.auth?.resource_roles ?? req.auth?.roles);
+  let groups = toStringArray(req.auth?.groups);
+
+  if (roleIds.length === 0 && groups.length === 0) {
+    const authHeader = req.headers.authorization || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
+    const me = token ? await fetchMe(token) : null;
+    if (me) {
+      roleIds = normalizeResourceRoles(me.resource_roles ?? me.roles);
+      groups = toStringArray(me.groups);
+    }
+  }
+
+  const fromRoles = roleIds.map((r) => ROLE_ID_TO_APP_ROLE[r]);
+  const fromGroups = groups.map((g) => GROUP_TO_APP_ROLE[g]);
+  const appRoles = Array.from(
+    new Set([...fromRoles, ...fromGroups].filter((r): r is AppRole => Boolean(r))),
+  );
+
+  return { roleIds, groups, appRoles };
+}
+
+/** Highest-privilege app role from a list (defaults to "user"). */
+export function highestAppRole(roles: AppRole[]): AppRole {
+  return roles.reduce<AppRole>((h, r) => (ROLE_RANK[r] > ROLE_RANK[h] ? r : h), "user");
 }
 
 // ---------------------------------------------------------------------------
@@ -85,9 +212,10 @@ export async function authenticate(
   const token = authHeader.slice(7);
 
   try {
+    assertAuthConfig();
     const { payload } = await jwtVerify(token, getJWKS(), {
-      audience: AUDIENCE || undefined,
-      issuer: AUTHORITY || undefined,
+      audience: AUDIENCE,
+      issuer: AUTHORITY,
       algorithms: ["RS256"],
     });
 
@@ -138,6 +266,28 @@ export function requireAnyPermission(...permissions: string[]) {
         res.status(403).json({
           error: "Forbidden",
           message: `One of [${permissions.join(", ")}] required`,
+        });
+        return;
+      }
+      next();
+    },
+  ];
+}
+
+/**
+ * Requires the user to hold one of the listed Access Roles. Roles are resolved
+ * from the token `resource_roles` claim, falling back to the Authifi `/me`
+ * endpoint. Usage: `app.put("/api/x", ...requireRole("editor", "owner"), handler)`
+ */
+export function requireRole(...allowed: AppRole[]) {
+  return [
+    authenticate,
+    async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+      const { appRoles } = await getAuthzContext(req);
+      if (!appRoles.some((r) => allowed.includes(r))) {
+        res.status(403).json({
+          error: "Forbidden",
+          message: `One of roles [${allowed.join(", ")}] required`,
         });
         return;
       }

@@ -4,6 +4,9 @@ import {
   authenticate,
   requirePermission,
   requireAnyPermission,
+  requireRole,
+  getAuthzContext,
+  highestAppRole,
 } from "./middleware/authifi";
 
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL || "";
@@ -19,6 +22,83 @@ const folderMap: Record<string, string> = {
 
 function encodePath(path: string): string {
   return path.split("/").map(encodeURIComponent).join("/");
+}
+
+// Scopes granted to each Access Role, per the MarketingResources IAM mapping
+// (marketingresources.* namespace). Returned by /api/me so the frontend can
+// gate per-control UI from the authoritative role rather than the token.
+const ROLE_SCOPES: Record<string, string[]> = {
+  owner: [
+    "marketingresources.app.delete",
+    "marketingresources.assets.delete",
+    "marketingresources.assets.download",
+    "marketingresources.assets.edit",
+    "marketingresources.assets.upload",
+    "marketingresources.assets.view",
+    "marketingresources.brands.create",
+    "marketingresources.brands.delete",
+    "marketingresources.brands.edit",
+    "marketingresources.brands.view",
+    "marketingresources.colors.copy",
+    "marketingresources.colors.create",
+    "marketingresources.colors.delete",
+    "marketingresources.colors.edit",
+    "marketingresources.colors.view",
+    "marketingresources.images.delete",
+    "marketingresources.images.upload",
+    "marketingresources.images.view",
+    "marketingresources.requests.create",
+    "marketingresources.requests.view",
+    "marketingresources.settings.manage",
+    "marketingresources.settings.view",
+    "marketingresources.store.view",
+    "marketingresources.templates.create",
+    "marketingresources.templates.delete",
+    "marketingresources.templates.download",
+    "marketingresources.templates.edit",
+    "marketingresources.templates.view",
+    "marketingresources.users.manage",
+    "marketingresources.users.view",
+  ],
+  editor: [
+    "marketingresources.assets.download",
+    "marketingresources.assets.edit",
+    "marketingresources.assets.upload",
+    "marketingresources.assets.view",
+    "marketingresources.brands.create",
+    "marketingresources.brands.edit",
+    "marketingresources.brands.view",
+    "marketingresources.colors.copy",
+    "marketingresources.colors.create",
+    "marketingresources.colors.edit",
+    "marketingresources.colors.view",
+    "marketingresources.images.upload",
+    "marketingresources.images.view",
+    "marketingresources.requests.create",
+    "marketingresources.requests.view",
+    "marketingresources.store.view",
+    "marketingresources.templates.create",
+    "marketingresources.templates.download",
+    "marketingresources.templates.edit",
+    "marketingresources.templates.view",
+  ],
+  user: [
+    "marketingresources.assets.download",
+    "marketingresources.assets.view",
+    "marketingresources.brands.view",
+    "marketingresources.colors.copy",
+    "marketingresources.colors.view",
+    "marketingresources.images.view",
+    "marketingresources.requests.create",
+    "marketingresources.requests.view",
+    "marketingresources.store.view",
+    "marketingresources.templates.download",
+    "marketingresources.templates.view",
+  ],
+};
+
+function scopesForRole(role: string): string[] {
+  return ROLE_SCOPES[role] ?? [];
 }
 
 async function signObject(path: string, download = false): Promise<string | null> {
@@ -59,19 +139,18 @@ export async function registerRoutes(
 ): Promise<Server> {
 
   // -----------------------------------------------------------------------
-  // PUBLIC — no authentication required
+  // ASSET PROXIES
+  //
+  // These serve `<img src>` / `<a href>` targets, which browsers cannot
+  // attach a Bearer token to. They redirect to short-lived Supabase signed
+  // URLs and are restricted by a strict path allowlist (validPath). NOTE:
+  // these remain unauthenticated by necessity of the <img>/<a> mechanism;
+  // hardening them further (authenticated fetch → blob, or capability tokens)
+  // is tracked separately. The Supabase URL is NOT exposed via any endpoint.
   // -----------------------------------------------------------------------
-
-  /** Runtime config (Supabase URL). Called during app initialisation. */
-  app.get("/api/config", (_req, res) => {
-    res.json({ supabaseUrl: SUPABASE_URL });
-  });
 
   /**
    * Asset proxy — returns a temporary Supabase signed URL via redirect.
-   * Used as `<img src>` in the frontend; browsers cannot attach Bearer
-   * tokens to <img> requests, so this endpoint is public. Security is
-   * provided by Supabase signed URL expiry (1 h) and path validation.
    */
   app.get("/api/asset", async (req, res) => {
     const path = req.query.path;
@@ -148,6 +227,82 @@ export async function registerRoutes(
         res.status(500).json({ error: "Failed to list images" });
       }
     }
+  );
+
+  // -----------------------------------------------------------------------
+  // Example endpoints backing the Editor and Admin pages.
+  // Each is independently guarded — the frontend gating is UX only.
+  // -----------------------------------------------------------------------
+
+  /**
+   * Returns the caller's identity + authorization as seen by the server.
+   * Roles come from the Authifi Access Roles (`resource_roles` claim, falling
+   * back to the /me endpoint); scopes are derived from the resolved role.
+   * The frontend uses this as the single source of truth for gating.
+   */
+  app.get("/api/me", authenticate, async (req, res) => {
+    const { roleIds, groups, appRoles } = await getAuthzContext(req);
+    const role = highestAppRole(appRoles);
+    res.json({
+      sub: req.auth?.sub,
+      email: req.auth?.email,
+      name: req.auth?.name,
+      resource_roles: roleIds,
+      roles: appRoles,
+      role,
+      groups,
+      scopes: scopesForRole(role),
+    });
+  });
+
+  /**
+   * Save editable content (demo). Echoes the payload back.
+   * Role: editor or owner.
+   */
+  app.put(
+    "/api/editor/content",
+    ...requireRole("editor", "owner"),
+    (req, res) => {
+      res.json({ ok: true, saved: req.body });
+    },
+  );
+
+  /**
+   * List users for the admin dashboard. Returns an empty list — this app has
+   * no local users table (Authifi owns identity). Wire this to the Authifi
+   * admin API to list real group members.
+   * Role: owner.
+   */
+  app.get(
+    "/api/admin/users",
+    ...requireRole("owner"),
+    (_req, res) => {
+      res.json([]);
+    },
+  );
+
+  /**
+   * Update application settings (demo). Echoes the payload back.
+   * Role: owner.
+   */
+  app.put(
+    "/api/admin/settings",
+    ...requireRole("owner"),
+    (req, res) => {
+      res.json({ ok: true, settings: req.body });
+    },
+  );
+
+  /**
+   * Delete the application (demo — performs no destructive action).
+   * Permission: marketingresources.app.delete (owner-only in Authifi).
+   */
+  app.delete(
+    "/api/admin/app",
+    ...requirePermission("marketingresources.app.delete"),
+    (_req, res) => {
+      res.json({ ok: true, message: "App deletion acknowledged (demo — nothing was deleted)." });
+    },
   );
 
   // -----------------------------------------------------------------------

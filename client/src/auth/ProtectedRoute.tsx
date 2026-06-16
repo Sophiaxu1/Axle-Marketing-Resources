@@ -1,19 +1,23 @@
 /**
- * ProtectedRoute — Route guard for Authifi permission-based access control.
+ * ProtectedRoute — Route guard for Authifi role/permission-based access.
  *
- * Wraps child components and checks that the current user has the required
- * permission(s) in the JWT `scope` claim. If the user is not authenticated
- * they are redirected to /login. If authenticated but lacking the required
- * permission they are sent to /unauthorized.
+ * Wraps child components and grants access if the user satisfies ANY of the
+ * provided criteria — a required role (from groups/roles) OR a required
+ * permission (from the access-token `scope` claim). If the user is not
+ * authenticated they are redirected to /login; if authenticated but lacking
+ * access they are sent to /unauthorized. With no criteria, any valid session
+ * is allowed.
  *
  * Usage:
- *   <ProtectedRoute requiredPermission="marketingresources.brands.view">
- *     <BrandKit />
+ *   <ProtectedRoute requiredRoles={["editor", "owner"]} requiredPermissions={EDITOR_PERMS}>
+ *     <Editor />
  *   </ProtectedRoute>
  */
 
 import { useAuth } from "react-oidc-context";
 import { Redirect } from "wouter";
+import { useRole, type Role } from "./useRole";
+import { usePermissions } from "./usePermissions";
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -24,6 +28,8 @@ interface ProtectedRouteProps {
   /** If true every permission in `requiredPermissions` must be present (AND).
    *  If false (default) at least one must be present (OR). */
   requireAll?: boolean;
+  /** Roles that may access. Satisfied if the user's role is in this list. */
+  requiredRoles?: Role[];
 }
 
 export function ProtectedRoute({
@@ -31,11 +37,14 @@ export function ProtectedRoute({
   requiredPermission,
   requiredPermissions,
   requireAll = false,
+  requiredRoles,
 }: ProtectedRouteProps) {
   const auth = useAuth();
+  const { role, isLoading } = useRole();
+  const { scopes } = usePermissions();
 
-  // Still loading OIDC state (e.g. silent renew or initial load).
-  if (auth.isLoading) {
+  // Still loading OIDC state or the /api/me role lookup.
+  if (auth.isLoading || (auth.isAuthenticated && isLoading)) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <p className="text-muted-foreground text-sm animate-pulse">
@@ -50,23 +59,27 @@ export function ProtectedRoute({
     return <Redirect to="/login" replace />;
   }
 
-  // Parse permissions from the access token scope claim.
-  const scopes: string[] =
-    (auth.user?.profile?.scope as string)?.split(" ") ?? [];
-
-  // Check single permission.
-  if (requiredPermission && !scopes.includes(requiredPermission)) {
-    return <Redirect to="/unauthorized" replace />;
+  // Collect each provided criterion's result; access is granted if ANY passes.
+  const checks: boolean[] = [];
+  if (requiredRoles && requiredRoles.length > 0) {
+    checks.push(requiredRoles.includes(role));
+  }
+  if (requiredPermission) {
+    checks.push(scopes.includes(requiredPermission));
+  }
+  if (requiredPermissions && requiredPermissions.length > 0) {
+    checks.push(
+      requireAll
+        ? requiredPermissions.every((p) => scopes.includes(p))
+        : requiredPermissions.some((p) => scopes.includes(p)),
+    );
   }
 
-  // Check multiple permissions.
-  if (requiredPermissions && requiredPermissions.length > 0) {
-    const hasAccess = requireAll
-      ? requiredPermissions.every((p) => scopes.includes(p))
-      : requiredPermissions.some((p) => scopes.includes(p));
-    if (!hasAccess) {
-      return <Redirect to="/unauthorized" replace />;
-    }
+  // No criteria specified → any authenticated user is allowed.
+  if (checks.length === 0) return <>{children}</>;
+
+  if (!checks.some(Boolean)) {
+    return <Redirect to="/unauthorized" replace />;
   }
 
   return <>{children}</>;

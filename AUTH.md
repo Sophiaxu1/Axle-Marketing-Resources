@@ -154,11 +154,22 @@ The app runs on `http://localhost:3000` (set `PORT=3000` in `.env`).
   (ProtectedRoute, usePermissions) are for UX only. The backend independently
   validates JWTs and checks scopes.
 
-- **Asset proxy endpoints** (`/api/asset`, `/api/download`) are public because
-  they serve `<img>` and `<a>` tags that cannot carry Bearer tokens. Security
-  is provided by Supabase signed URL expiry (1 hour) and path validation.
+- **Fail closed on config.** Token validation requires both `AUTHIFI_AUTHORITY`
+  and `AUTHIFI_AUDIENCE`; if either is unset the middleware throws rather than
+  skipping `aud`/`iss` validation (`assertAuthConfig`).
 
-- **All other API endpoints** require a valid JWT with the appropriate permission.
+- **No config endpoint.** The Supabase URL is not exposed via any runtime
+  endpoint (the former public `GET /api/config` was removed); the server holds
+  it as a server-only env var.
+
+- **Asset proxy endpoints** (`/api/asset`, `/api/download`) remain
+  unauthenticated because they serve `<img>` and `<a>` tags that cannot carry
+  Bearer tokens; they are restricted by a strict path allowlist and short-lived
+  Supabase signed URLs. KNOWN GAP (IAM review): an unauthenticated caller can
+  still obtain signed URLs for allowed-prefix paths. Hardening (authenticated
+  fetch → blob, or capability tokens) is a tracked follow-up.
+
+- **All other API endpoints** require a valid JWT with the appropriate role/permission.
 
 - **PKCE** is used (public client, `tokenEndpointAuthMethod: "none"`). No
   client secret is stored in the frontend.
@@ -188,3 +199,56 @@ app.post("/api/brands", ...requirePermission("marketingresources.brands.create")
 const { hasPermission } = usePermissions();
 {hasPermission("marketingresources.brands.delete") && <DeleteButton />}
 ```
+
+## Example Pages: Editor & Admin
+
+Two example pages demonstrate end-to-end role + permission gating. They use the
+**canonical `marketingresources.*` scopes** from the MarketingResources IAM
+mapping (`MarketingResources.pdf`), exposed via the `SCOPE` constant in
+`usePermissions.ts` (the same namespace as the `P` constants).
+
+### Roles & groups (per the provisioning spec)
+
+| Group | Role |
+|-------|------|
+| `axle-marketing-owners` | Owner |
+| `axle-marketing-team` | Editor |
+| `axle-employees` | User |
+
+Authorization is **role-based, sourced from `GET /api/me`** (the single source
+of truth). The server resolves the role from **both** the Authifi **Access
+Roles** (`resource_roles`) **and** the user's **groups** — whichever grants the
+higher role wins, so membership in `axle-marketing-owners` resolves to `owner`
+even if `resource_roles` only carries an editor role. Token claims are read
+first, falling back to a server-side call to the Authifi `/me` endpoint
+(`server/middleware/authifi.ts` → `getAuthzContext` / `requireRole`).
+`/api/me` returns `{ role, roles, resource_roles, groups, scopes }`, where
+`scopes` are the canonical scopes granted to the resolved role.
+
+On the client, `useMe()` (`client/src/auth/me.ts`) fetches `/api/me`; `useRole()`
+and `usePermissions()` both read from it. Calling our backend (not Authifi `/me`
+directly) avoids browser CORS against the tenant.
+
+### Navigation
+
+`AppHeader` (`client/src/components/AppHeader.tsx`) renders on every
+authenticated page. The **Editor** and **Admin** links appear when the user has
+the matching **role** (from `/api/me`) OR any permission in `EDITOR_PERMS` /
+`ADMIN_PERMS`.
+
+### Pages
+
+| Page | Route | Frontend guard (role OR permission) | Per-control gating |
+|------|-------|----------------|--------------------|
+| Editor | `/editor` | `requiredRoles={["editor","owner"]}` or any `EDITOR_PERMS` | edit → `brands.edit`; create → `brands.create`; upload → `assets.upload`/`images.upload`; delete → `assets.delete`/`brands.delete`/`images.delete` |
+| Admin  | `/admin`  | `requiredRoles={["owner"]}` or any `ADMIN_PERMS` | users → `users.manage`; settings view/manage → `settings.view`/`settings.manage`; danger zone → ungated demo |
+
+### Example endpoints (`server/routes.ts`) — role-enforced
+
+| Endpoint | Required role |
+|----------|------|
+| `GET /api/me` | any valid token |
+| `PUT /api/editor/content` | editor or owner |
+| `GET /api/admin/users` | owner |
+| `PUT /api/admin/settings` | owner |
+| `DELETE /api/admin/app` | any valid token (no `app.delete` role/scope — demo, deletes nothing) |
