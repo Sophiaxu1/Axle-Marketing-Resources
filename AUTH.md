@@ -203,10 +203,9 @@ const { hasPermission } = usePermissions();
 ## Example Pages: Editor & Admin
 
 Two example pages demonstrate end-to-end role + permission gating. They use the
-**canonical `axlemarketingresources.*` scopes** from the provisioning spec
-(`Marketing-Resources-Final-Phase.pdf`), exposed via the `SCOPE` constant in
-`usePermissions.ts`. (The legacy `P` constants / `marketingresources.*`
-namespace remain in use by the rest of the app.)
+**canonical `marketingresources.*` scopes** from the MarketingResources IAM
+mapping (`MarketingResources.pdf`), exposed via the `SCOPE` constant in
+`usePermissions.ts` (the same namespace as the `P` constants).
 
 ### Roles & groups (per the provisioning spec)
 

@@ -79,30 +79,28 @@ export const P = {
 } as const;
 
 // ---------------------------------------------------------------------------
-// Canonical Authifi scopes (axlemarketingresources.*) — per the provisioning
-// spec in Marketing-Resources-Final-Phase.pdf. These are the scopes Authifi
-// actually issues in the token, and are used by the example Editor/Admin
-// pages. (The `P` constants above use the legacy `marketingresources.*`
-// namespace still referenced elsewhere in the app.)
+// Authifi RS permission scopes (marketingresources.* — the canonical namespace
+// per the MarketingResources IAM mapping). Used by the example Editor/Admin
+// pages; same namespace as the `P` constants above.
 // ---------------------------------------------------------------------------
 
 export const SCOPE = {
-  ASSETS_VIEW: "axlemarketingresources.assets.view",
-  ASSETS_DOWNLOAD: "axlemarketingresources.assets.download",
-  ASSETS_UPLOAD: "axlemarketingresources.assets.upload",
-  ASSETS_DELETE: "axlemarketingresources.assets.delete",
-  BRANDS_VIEW: "axlemarketingresources.brands.view",
-  BRANDS_EDIT: "axlemarketingresources.brands.edit",
-  BRANDS_CREATE: "axlemarketingresources.brands.create",
-  BRANDS_DELETE: "axlemarketingresources.brands.delete",
-  IMAGES_VIEW: "axlemarketingresources.images.view",
-  IMAGES_UPLOAD: "axlemarketingresources.images.upload",
-  IMAGES_DELETE: "axlemarketingresources.images.delete",
-  REQUESTS_VIEW: "axlemarketingresources.requests.view",
-  REQUESTS_CREATE: "axlemarketingresources.requests.create",
-  SETTINGS_VIEW: "axlemarketingresources.settings.view",
-  SETTINGS_MANAGE: "axlemarketingresources.settings.manage",
-  USERS_MANAGE: "axlemarketingresources.users.manage",
+  ASSETS_VIEW: "marketingresources.assets.view",
+  ASSETS_DOWNLOAD: "marketingresources.assets.download",
+  ASSETS_UPLOAD: "marketingresources.assets.upload",
+  ASSETS_DELETE: "marketingresources.assets.delete",
+  BRANDS_VIEW: "marketingresources.brands.view",
+  BRANDS_EDIT: "marketingresources.brands.edit",
+  BRANDS_CREATE: "marketingresources.brands.create",
+  BRANDS_DELETE: "marketingresources.brands.delete",
+  IMAGES_VIEW: "marketingresources.images.view",
+  IMAGES_UPLOAD: "marketingresources.images.upload",
+  IMAGES_DELETE: "marketingresources.images.delete",
+  REQUESTS_VIEW: "marketingresources.requests.view",
+  REQUESTS_CREATE: "marketingresources.requests.create",
+  SETTINGS_VIEW: "marketingresources.settings.view",
+  SETTINGS_MANAGE: "marketingresources.settings.manage",
+  USERS_MANAGE: "marketingresources.users.manage",
 } as const;
 
 // ---------------------------------------------------------------------------

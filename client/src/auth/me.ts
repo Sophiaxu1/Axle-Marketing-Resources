@@ -25,7 +25,7 @@ export interface Me {
   /** Highest-privilege app role. */
   role: Role;
   groups: string[];
-  /** Scopes granted to the resolved role (canonical axlemarketingresources.*). */
+  /** Scopes granted to the resolved role (canonical marketingresources.*). */
   scopes: string[];
 }
 

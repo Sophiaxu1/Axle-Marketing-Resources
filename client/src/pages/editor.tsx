@@ -138,7 +138,7 @@ export default function Editor() {
                       <X className="w-4 h-4 text-muted-foreground/50" />
                     )}
                     <span className={granted ? "text-foreground" : "text-muted-foreground/60"}>
-                      {perm.replace("axlemarketingresources.", "")}
+                      {perm.replace("marketingresources.", "")}
                     </span>
                   </div>
                 );

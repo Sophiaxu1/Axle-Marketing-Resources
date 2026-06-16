@@ -24,45 +24,76 @@ function encodePath(path: string): string {
   return path.split("/").map(encodeURIComponent).join("/");
 }
 
-// Canonical scopes granted to each Access Role, per the provisioning spec
-// (Marketing-Resources-Final-Phase.pdf). Returned by /api/me so the frontend
-// can gate per-control UI from the authoritative role rather than the token.
+// Scopes granted to each Access Role, per the MarketingResources IAM mapping
+// (marketingresources.* namespace). Returned by /api/me so the frontend can
+// gate per-control UI from the authoritative role rather than the token.
 const ROLE_SCOPES: Record<string, string[]> = {
   owner: [
-    "axlemarketingresources.assets.view",
-    "axlemarketingresources.assets.download",
-    "axlemarketingresources.assets.upload",
-    "axlemarketingresources.assets.delete",
-    "axlemarketingresources.brands.view",
-    "axlemarketingresources.brands.edit",
-    "axlemarketingresources.brands.create",
-    "axlemarketingresources.brands.delete",
-    "axlemarketingresources.images.view",
-    "axlemarketingresources.images.upload",
-    "axlemarketingresources.images.delete",
-    "axlemarketingresources.requests.view",
-    "axlemarketingresources.requests.create",
-    "axlemarketingresources.settings.view",
-    "axlemarketingresources.settings.manage",
-    "axlemarketingresources.users.manage",
+    "marketingresources.app.delete",
+    "marketingresources.assets.delete",
+    "marketingresources.assets.download",
+    "marketingresources.assets.edit",
+    "marketingresources.assets.upload",
+    "marketingresources.assets.view",
+    "marketingresources.brands.create",
+    "marketingresources.brands.delete",
+    "marketingresources.brands.edit",
+    "marketingresources.brands.view",
+    "marketingresources.colors.copy",
+    "marketingresources.colors.create",
+    "marketingresources.colors.delete",
+    "marketingresources.colors.edit",
+    "marketingresources.colors.view",
+    "marketingresources.images.delete",
+    "marketingresources.images.upload",
+    "marketingresources.images.view",
+    "marketingresources.requests.create",
+    "marketingresources.requests.view",
+    "marketingresources.settings.manage",
+    "marketingresources.settings.view",
+    "marketingresources.store.view",
+    "marketingresources.templates.create",
+    "marketingresources.templates.delete",
+    "marketingresources.templates.download",
+    "marketingresources.templates.edit",
+    "marketingresources.templates.view",
+    "marketingresources.users.manage",
+    "marketingresources.users.view",
   ],
   editor: [
-    "axlemarketingresources.assets.view",
-    "axlemarketingresources.assets.download",
-    "axlemarketingresources.assets.upload",
-    "axlemarketingresources.brands.view",
-    "axlemarketingresources.brands.edit",
-    "axlemarketingresources.images.view",
-    "axlemarketingresources.images.upload",
-    "axlemarketingresources.requests.view",
+    "marketingresources.assets.download",
+    "marketingresources.assets.edit",
+    "marketingresources.assets.upload",
+    "marketingresources.assets.view",
+    "marketingresources.brands.create",
+    "marketingresources.brands.edit",
+    "marketingresources.brands.view",
+    "marketingresources.colors.copy",
+    "marketingresources.colors.create",
+    "marketingresources.colors.edit",
+    "marketingresources.colors.view",
+    "marketingresources.images.upload",
+    "marketingresources.images.view",
+    "marketingresources.requests.create",
+    "marketingresources.requests.view",
+    "marketingresources.store.view",
+    "marketingresources.templates.create",
+    "marketingresources.templates.download",
+    "marketingresources.templates.edit",
+    "marketingresources.templates.view",
   ],
   user: [
-    "axlemarketingresources.assets.view",
-    "axlemarketingresources.assets.download",
-    "axlemarketingresources.brands.view",
-    "axlemarketingresources.images.view",
-    "axlemarketingresources.requests.view",
-    "axlemarketingresources.requests.create",
+    "marketingresources.assets.download",
+    "marketingresources.assets.view",
+    "marketingresources.brands.view",
+    "marketingresources.colors.copy",
+    "marketingresources.colors.view",
+    "marketingresources.images.view",
+    "marketingresources.requests.create",
+    "marketingresources.requests.view",
+    "marketingresources.store.view",
+    "marketingresources.templates.download",
+    "marketingresources.templates.view",
   ],
 };
 
@@ -264,12 +295,15 @@ export async function registerRoutes(
 
   /**
    * Delete the application (demo — performs no destructive action).
-   * Not tied to any Authifi scope: the canonical model has no app.delete
-   * permission, so this endpoint only requires a valid token.
+   * Permission: marketingresources.app.delete (owner-only in Authifi).
    */
-  app.delete("/api/admin/app", authenticate, (_req, res) => {
-    res.json({ ok: true, message: "App deletion acknowledged (demo — nothing was deleted)." });
-  });
+  app.delete(
+    "/api/admin/app",
+    ...requirePermission("marketingresources.app.delete"),
+    (_req, res) => {
+      res.json({ ok: true, message: "App deletion acknowledged (demo — nothing was deleted)." });
+    },
+  );
 
   // -----------------------------------------------------------------------
   // FUTURE ENDPOINTS — add with the correct permission guards
